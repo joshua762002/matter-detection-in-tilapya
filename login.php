@@ -12,40 +12,50 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (empty($email) || empty($password)) {
         $error = "Please enter email and password.";
     } else {
-        $stmt = $conn->prepare("SELECT user_id, full_name, password, role FROM users WHERE email = ?");
+        // ✅ Select all needed columns including assigned_pond
+        $stmt = $conn->prepare("SELECT user_id, full_name, password, role, assigned_pond 
+                                FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $stmt->store_result();
 
         if ($stmt->num_rows == 1) {
-            $stmt->bind_result($user_id, $full_name, $db_password, $role);
+            // ✅ Bind all 5 columns
+            $stmt->bind_result($user_id, $full_name, $db_password, $role, $assigned_pond);
             $stmt->fetch();
 
-            // Production: use password_verify() if passwords are hashed
-            if ($password === $db_password) {
-                $_SESSION['user_id'] = $user_id;
-                $_SESSION['full_name'] = $full_name;
-                $_SESSION['role'] = $role;
+            // ✅ Password check
+          if ($password === $db_password) {
+    // ✅ Set session variables
+    $_SESSION['user_id'] = $user_id;
+    $_SESSION['full_name'] = $full_name;
+    $_SESSION['email'] = $email;                // ✅ email
+    $_SESSION['role'] = $role;
+    $_SESSION['assigned_pond'] = $assigned_pond; // ✅ assigned pond
+    $_SESSION['last_login'] = date("Y-m-d H:i"); // ✅ last login (simulation)
 
-                switch ($role) {
-                    case 'admin':
-                        header("Location: admin_dashboard.php"); exit();
-                    case 'manager':
-                        header("Location: manager_dashboard.php"); exit();
-                    case 'staff':
-                        header("Location: staff_dashboard.php"); exit();
-                    default:
-                        $error = "Invalid role.";
-                }
+    // Optional: update last_login in DB
+    $stmt_update = $conn->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
+    $stmt_update->bind_param("i", $user_id);
+    $stmt_update->execute();
+    $stmt_update->close();
+
+    // Redirect based on role
+    switch ($role) {
+        case 'admin': header("Location: admin_dashboard.php"); exit();
+        case 'manager': header("Location: manager_dashboard.php"); exit();
+        case 'staff': header("Location: staff_dashboard.php"); exit();
+    }
+}
             } else {
                 $error = "Incorrect password.";
             }
-        } else {
+        
             $error = "No account found with that email.";
         }
+
         $stmt->close();
     }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
