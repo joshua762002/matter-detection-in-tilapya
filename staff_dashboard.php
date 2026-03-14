@@ -161,6 +161,10 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
                     pH Level
                     <span class="fw-bold" id="status-ph"><?php echo end($ph); ?></span>
                 </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    
+                
+                    </li>
             </ul>
         </div>
     </div>
@@ -185,10 +189,6 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
         <li class="list-group-item d-flex justify-content-between align-items-center">
             Last Login
             <span class="fw-bold"><?php echo $last_login; ?></span>
-        </li>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            Assigned Pond
-            <span class="fw-bold"><?php echo $assigned_pond; ?></span>
         </li>
 </ul>
         </ul>
@@ -352,6 +352,7 @@ setTimeout(function(){
    location.reload();
 }, 5000);
 </script>
+
 
 </body>
 </html>
