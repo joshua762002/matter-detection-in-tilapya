@@ -26,20 +26,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             // ✅ Password check
           if ($password === $db_password) {
-    // ✅ Set session variables
-    $_SESSION['user_id'] = $user_id;
-    $_SESSION['full_name'] = $full_name;
-    $_SESSION['email'] = $email;                // ✅ email
-    $_SESSION['role'] = $role;
-    $_SESSION['assigned_pond'] = $assigned_pond; // ✅ assigned pond
-    $_SESSION['last_login'] = date("Y-m-d H:i"); // ✅ last login (simulation)
+   // After password check
+$_SESSION['user_id'] = $user_id;
+$_SESSION['full_name'] = $full_name;
+$_SESSION['email'] = $email;
+$_SESSION['role'] = $role;
+$_SESSION['assigned_pond'] = $assigned_pond ?? 'N/A'; // <--- important
+$_SESSION['last_login'] = date("Y-m-d H:i"); // simulation
 
-    // Optional: update last_login in DB
-    $stmt_update = $conn->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
-    $stmt_update->bind_param("i", $user_id);
-    $stmt_update->execute();
-    $stmt_update->close();
-
+// Optional: update last_login in DB
+$stmt_update = $conn->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
+$stmt_update->bind_param("i", $user_id);
+$stmt_update->execute();
+$stmt_update->close();
     // Redirect based on role
     switch ($role) {
         case 'admin': header("Location: admin_dashboard.php"); exit();

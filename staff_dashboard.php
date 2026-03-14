@@ -2,13 +2,20 @@
 session_start();
 require_once "config.php";
 
+// Ensure logged in staff
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] != 'staff'){
     header("Location: login.php");
     exit();
 }
 
-$pond = $_SESSION['assigned_pond']; // Pedro = A-1, Ana = B-2
+// staff_dashboard.php
+$full_name     = $_SESSION['full_name'] ?? 'N/A';
+$assigned_pond = $_SESSION['assigned_pond'] ?? 'N/A';
+$pond          = $assigned_pond; // use this in queries
+$email         = $_SESSION['email'] ?? 'N/A';
+$last_login    = $_SESSION['last_login'] ?? 'N/A';
 
+// --- Fetch readings from database or simulate ---
 $sql = "SELECT DATE(detected_at) AS sample_date,
                organic_mg_l,
                temperature_c,
@@ -17,6 +24,7 @@ $sql = "SELECT DATE(detected_at) AS sample_date,
         WHERE pond_name='$pond'
         ORDER BY detected_at ASC
         LIMIT 14";
+
 $result = $conn->query($sql);
 
 $dates = [];
@@ -32,20 +40,21 @@ if($result && $result->num_rows > 0){
         $ph[] = floatval($row['ph_level']);
     }
 } else {
-    // Fallback simulation readings
-    for($i=0;$i<14;$i++){
-        $dates[] = date("M d", strtotime("-".(13-$i)." days"));
-        if($pond == "A-1"){ // Pedro
-            $organic[] = rand(40, 70);
-            $temp[] = rand(27, 30);
-            $ph[] = rand(6.8, 7.5);
-        } else { // Ana B-2
-            $organic[] = rand(50, 80);
-            $temp[] = rand(28, 31);
-            $ph[] = rand(7, 8);
+    // Simulation fallback
+        for($i=0;$i<14;$i++){
+            $dates[] = date("M d", strtotime("-".(13-$i)." days"));
+            if($pond == "A-1"){ 
+                $organic[] = rand(40,70);
+                $temp[] = rand(27,30);
+                $ph[] = rand(6.8,7.5);
+            } else { 
+                $organic[] = rand(50,80);
+                $temp[] = rand(28,31);
+                $ph[] = rand(7,8);
+            }
         }
     }
-}
+
 $conn->close();
 ?>
 
@@ -136,7 +145,7 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
     <div class="col-md-6">
         <div class="card p-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="card-title">Pond <?php echo $pond; ?> Status</h5>
+                <h5 class="card-title">Pond <?php echo $assigned_pond; ?> Status</h5>
                 <span class="badge bg-success badge-status" id="badge-status">Safe</span>
             </div>
             <ul class="list-group list-group-flush">
@@ -164,22 +173,24 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
         <i class="bi bi-person-circle"></i>
     </div>
     <ul class="list-group list-group-flush">
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-    Name
-    <span class="fw-bold"><?php echo isset($_SESSION['full_name']) ? $_SESSION['full_name'] : ''; ?></span>
-</li>
-<li class="list-group-item d-flex justify-content-between align-items-center">
-    Email
-    <span class="fw-bold"><?php echo isset($_SESSION['email']) ? $_SESSION['email'] : ''; ?></span>
-</li>
-<li class="list-group-item d-flex justify-content-between align-items-center">
-    Last Login
-    <span class="fw-bold"><?php echo isset($_SESSION['last_login']) ? $_SESSION['last_login'] : ''; ?></span>
-</li>
-<li class="list-group-item d-flex justify-content-between align-items-center">
-    Assigned Pond
-    <span class="fw-bold"><?php echo isset($_SESSION['assigned_pond']) ? $_SESSION['assigned_pond'] : 'N/A'; ?></span>
-</li>
+                    <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            Name
+            <span class="fw-bold"><?php echo $full_name; ?></span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            Email
+            <span class="fw-bold"><?php echo $email; ?></span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            Last Login
+            <span class="fw-bold"><?php echo $last_login; ?></span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            Assigned Pond
+            <span class="fw-bold"><?php echo $assigned_pond; ?></span>
+        </li>
+</ul>
         </ul>
 </div>
     </div>
@@ -189,7 +200,7 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
 <!-- Trends Chart -->
 <div class="chart-card">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="card-title">Pond <?php echo $pond; ?> Trends</h4>
+        <h4 class="card-title">Pond <?php echo $assigned_pond; ?> Trends</h4>
         <span class="badge bg-primary">Live Data</span>
     </div>
     <canvas id="pondChart"></canvas>
