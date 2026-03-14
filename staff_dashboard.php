@@ -136,7 +136,7 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
     <div class="col-md-6">
         <div class="card p-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="card-title">Pond A-1 Status</h5>
+                <h5 class="card-title">Pond <?php echo $pond; ?> Status</h5>
                 <span class="badge bg-success badge-status" id="badge-status">Safe</span>
             </div>
             <ul class="list-group list-group-flush">
