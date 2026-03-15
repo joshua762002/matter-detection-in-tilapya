@@ -39,21 +39,46 @@ if($result && $result->num_rows > 0){
         $temp[] = floatval($row['temperature_c']);
         $ph[] = floatval($row['ph_level']);
     }
-} else {
+} else 
     // Simulation fallback
-        for($i=0;$i<14;$i++){
-            $dates[] = date("M d", strtotime("-".(13-$i)." days"));
-            if($pond == "A-1"){ 
-                $organic[] = rand(40,70);
-                $temp[] = rand(27,30);
-                $ph[] = rand(6.8,7.5);
-            } else { 
-                $organic[] = rand(50,80);
-                $temp[] = rand(28,31);
-                $ph[] = rand(7,8);
-            }
+  for($i=0;$i<14;$i++){
+    $dates[] = date("M d", strtotime("-".(13-$i)." days"));
+
+    if($pond == "A-1"){ 
+        // Organic random safe value
+        $organic_val = rand(50,250)/10; // 5.0 – 25.0
+
+        // 10% chance na maging HIGH (unsafe)
+        if(rand(1,10) == 1){
+            $organic_val = rand(260,350)/10; // 26 – 35 mg/L → high
         }
+        $organic[] = $organic_val;
+
+        // Temperature
+        $temp_val = rand(260,310)/10; // 26 – 31 °C
+        if(rand(1,10) == 1){ $temp_val = rand(315,330)/10; } // spike temp
+        $temp[] = $temp_val;
+
+        // pH
+        $ph_val = rand(65,85)/10; // 6.5 – 8.5
+        if(rand(1,20) == 1){ $ph_val = rand(60,90)/10; } // rare spike
+        $ph[] = $ph_val;
+
+    } else { 
+        // other ponds (similar logic)
+        $organic_val = rand(60,280)/10;
+        if(rand(1,10) == 1){ $organic_val = rand(290,350)/10; }
+        $organic[] = $organic_val;
+
+        $temp_val = rand(270,320)/10;
+        if(rand(1,10) == 1){ $temp_val = rand(325,340)/10; }
+        $temp[] = $temp_val;
+
+        $ph_val = rand(70,85)/10;
+        if(rand(1,20) == 1){ $ph_val = rand(60,90)/10; }
+        $ph[] = $ph_val;
     }
+}
 
 $conn->close();
 ?>
@@ -162,9 +187,7 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
                     <span class="fw-bold" id="status-ph"><?php echo end($ph); ?></span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                    
-                
-                    </li>
+
             </ul>
         </div>
     </div>
@@ -330,13 +353,38 @@ const tempAnim = new CountUp('sum-temp', <?php echo round(array_sum($temp)/count
 const phAnim = new CountUp('sum-ph', <?php echo round(array_sum($ph)/count($ph),1); ?>, options);
 orgAnim.start(); tempAnim.start(); phAnim.start();
 
-// --- Pulsing Badge if Unsafe ---
-function updateBadge(){
-    const organicVal = <?php echo end($organic); ?>;
-    const tempVal = <?php echo end($temp); ?>;
-    const phVal = <?php echo end($ph); ?>;
-    const badge = document.getElementById('badge-status');
-    if(organicVal>100 || tempVal>32 || phVal<6.5 || phVal>8.5){
+
+// Grab elements
+const statusOrg  = document.getElementById('status-org');
+const statusTemp = document.getElementById('status-temp');
+const statusPh   = document.getElementById('status-ph');
+const badge      = document.getElementById('badge-status');
+
+// Function to simulate realistic pond readings
+function simulateReading(){
+    // Organic (5.0 - 25.0 safe, 26-35 high chance small)
+    let organic = Math.random() < 0.1 ? (26 + Math.random()*9) : (5 + Math.random()*20);
+
+    // Temperature (26-31 safe, 31-33 spike small chance)
+    let temp = Math.random() < 0.1 ? (31 + Math.random()*2) : (26 + Math.random()*5);
+
+    // pH (6.5-8.5 safe, 6.0-6.5 or 8.5-9.0 rare spike)
+    let ph = Math.random() < 0.05 ? (Math.random() < 0.5 ? (6 + Math.random()*0.5) : (8.5 + Math.random()*0.5)) : (6.5 + Math.random()*2);
+
+    return { organic, temp, ph };
+}
+
+// Update panel with numbers + badge
+function updatePanel(){
+    const data = simulateReading();
+
+    // Update numbers
+    statusOrg.textContent  = data.organic.toFixed(1);
+    statusTemp.textContent = data.temp.toFixed(1);
+    statusPh.textContent   = data.ph.toFixed(1);
+
+    // Update badge
+    if(data.organic > 25 || data.temp > 31 || data.ph < 6.5 || data.ph > 8.5){
         badge.textContent = 'Unsafe';
         badge.classList.remove('bg-success');
         badge.classList.add('bg-danger','pulse');
@@ -346,12 +394,26 @@ function updateBadge(){
         badge.classList.add('bg-success');
     }
 }
-updateBadge();
 
-setTimeout(function(){
-   location.reload();
-}, 5000);
+// Run every 5 seconds
+updatePanel(); // initial load
+setInterval(updatePanel, 5000);
 </script>
+<footer style="
+    width: 100%;
+    background: rgba(31, 42, 56, 0.85); /* match sa card bg pero semi-transparent */
+    color: #eee; /* light text para contrast sa dark bg */
+    text-align: center;
+    padding: 12px 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.4);
+    backdrop-filter: blur(3px);
+    margin-top: 30px;
+    
+">
+    2026 &copy; Organic-Matter Detection in Tilapia
+</footer>
 
 
 </body>
