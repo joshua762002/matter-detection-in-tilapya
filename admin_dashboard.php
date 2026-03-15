@@ -1361,6 +1361,28 @@ if(isset($_POST['action'])) {
             100% { opacity: 1; transform: scale(1); }
         }
 
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
         /* Responsive */
         @media (max-width: 1200px) {
             .grid-2, .grid-3, .grid-4 {
@@ -1756,19 +1778,131 @@ if(isset($_POST['action'])) {
 
         <!-- Report Generation + Recent Activities -->
         <div class="grid-2">
-            <!-- Report Generation -->
+            <!-- Report Generation - Enhanced with Icons -->
             <div class="card">
                 <div class="card-header">
                     <span><i class="fas fa-file-alt" style="color: #3b82f6;"></i> Report Generation</span>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1rem;">
-                    <button class="btn btn-primary" onclick="generateReport('daily')">Daily Report</button>
-                    <button class="btn btn-primary" onclick="generateReport('weekly')">Weekly Report</button>
-                    <button class="btn btn-primary" onclick="generateReport('monthly')">Monthly Report</button>
+                    <span class="status-badge" style="background: rgba(59,130,246,0.2); color: #3b82f6;">
+                        <i class="fas fa-chart-pie"></i> Analytics
+                    </span>
                 </div>
                 
-                <div id="reportPreview" style="background: rgba(255,255,255,0.02); border-radius: 12px; padding: 1rem;">
-                    <!-- Preview will be updated via JavaScript -->
+                <!-- Report Type Buttons with Icons -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1.5rem;">
+                    <button class="btn btn-primary" onclick="generateReport('daily')" style="display: flex; flex-direction: column; padding: 1rem; height: auto; background: linear-gradient(145deg, #2a3f5e, #1e2f47); border: 1px solid rgba(255,255,255,0.1);">
+                        <i class="fas fa-calendar-day" style="font-size: 1.5rem; margin-bottom: 0.5rem; color: #4ade80;"></i>
+                        <span style="font-weight: 600;">Daily Report</span>
+                        <small style="font-size: 0.7rem; opacity: 0.8;">24-hour summary</small>
+                    </button>
+                    <button class="btn btn-primary" onclick="generateReport('weekly')" style="display: flex; flex-direction: column; padding: 1rem; height: auto; background: linear-gradient(145deg, #2a3f5e, #1e2f47); border: 1px solid rgba(255,255,255,0.1);">
+                        <i class="fas fa-calendar-week" style="font-size: 1.5rem; margin-bottom: 0.5rem; color: #fbbf24;"></i>
+                        <span style="font-weight: 600;">Weekly Report</span>
+                        <small style="font-size: 0.7rem; opacity: 0.8;">7-day trends</small>
+                    </button>
+                    <button class="btn btn-primary" onclick="generateReport('monthly')" style="display: flex; flex-direction: column; padding: 1rem; height: auto; background: linear-gradient(145deg, #2a3f5e, #1e2f47); border: 1px solid rgba(255,255,255,0.1);">
+                        <i class="fas fa-calendar-alt" style="font-size: 1.5rem; margin-bottom: 0.5rem; color: #3b82f6;"></i>
+                        <span style="font-weight: 600;">Monthly Report</span>
+                        <small style="font-size: 0.7rem; opacity: 0.8;">30-day analysis</small>
+                    </button>
+                </div>
+                
+                <!-- Report Preview Area with Icons -->
+                <div id="reportPreview" style="background: rgba(255,255,255,0.02); border-radius: 16px; padding: 1.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <i class="fas fa-chart-bar" style="color: #3b82f6;"></i>
+                        <h4 style="font-size: 1rem; font-weight: 600;">Daily Report Preview</h4>
+                        <span style="margin-left: auto; background: #1e2f47; padding: 0.2rem 0.8rem; border-radius: 50px; font-size: 0.7rem; display: flex; align-items: center; gap: 0.3rem;">
+                            <i class="far fa-clock"></i> <?php echo date('M d, Y'); ?>
+                        </span>
+                    </div>
+                    
+                    <!-- Stats Grid with Icons -->
+                    <div class="grid-3" style="gap: 0.8rem; margin-bottom: 1rem;">
+                        <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 1rem; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <i class="fas fa-water" style="color: #3b82f6;"></i>
+                                <span style="font-size: 0.8rem; color: rgba(255,255,255,0.6);">Total Ponds</span>
+                            </div>
+                            <div style="font-size: 2rem; font-weight: 700; color: #3b82f6;"><?php echo $daily_report['total_ponds']; ?></div>
+                        </div>
+                        
+                        <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 1rem; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem;">
+                                <i class="fas fa-chart-pie" style="color: #fbbf24;"></i>
+                                <span style="font-size: 0.8rem; color: rgba(255,255,255,0.6);">Status Distribution</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-around;">
+                                <div style="text-align: center;">
+                                    <div style="color: #4ade80; font-weight: 600; font-size: 1.2rem;"><?php echo $daily_report['safe_ponds']; ?></div>
+                                    <small style="color: #4ade80; display: flex; align-items: center; gap: 0.2rem;"><i class="fas fa-circle"></i> Safe</small>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div style="color: #fbbf24; font-weight: 600; font-size: 1.2rem;"><?php echo $daily_report['warning_ponds']; ?></div>
+                                    <small style="color: #fbbf24; display: flex; align-items: center; gap: 0.2rem;"><i class="fas fa-circle"></i> Warning</small>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div style="color: #ef4444; font-weight: 600; font-size: 1.2rem;"><?php echo $daily_report['critical_ponds']; ?></div>
+                                    <small style="color: #ef4444; display: flex; align-items: center; gap: 0.2rem;"><i class="fas fa-circle"></i> Critical</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 1rem; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                                <span style="font-size: 0.8rem; color: rgba(255,255,255,0.6);">Active Alerts</span>
+                            </div>
+                            <div style="font-size: 1.8rem; font-weight: 700; color: #ef4444;"><?php echo $daily_report['alerts_generated']; ?></div>
+                            <small style="color: rgba(255,255,255,0.4); display: flex; align-items: center; gap: 0.3rem;"><i class="far fa-clock"></i> Last 24h</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Metrics Summary with Icons -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.8rem; background: rgba(255,255,255,0.02); padding: 0.8rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                            <i class="fas fa-seedling" style="color: #4ade80; font-size: 1.2rem;"></i>
+                            <div>
+                                <small style="color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 0.2rem;"><i class="fas fa-arrow-up"></i> Avg Organic</small>
+                                <div style="font-weight: 600; font-size: 1.1rem;"><?php echo $daily_report['avg_organic']; ?>%</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.8rem; background: rgba(255,255,255,0.02); padding: 0.8rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                            <i class="fas fa-thermometer-half" style="color: #fbbf24; font-size: 1.2rem;"></i>
+                            <div>
+                                <small style="color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 0.2rem;"><i class="fas fa-thermometer-half"></i> Avg Temp</small>
+                                <div style="font-weight: 600; font-size: 1.1rem;"><?php echo $daily_report['avg_temp']; ?>°C</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.8rem; background: rgba(255,255,255,0.02); padding: 0.8rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                            <i class="fas fa-flask" style="color: #a78bfa; font-size: 1.2rem;"></i>
+                            <div>
+                                <small style="color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 0.2rem;"><i class="fas fa-flask"></i> Avg pH</small>
+                                <div style="font-weight: 600; font-size: 1.1rem;"><?php echo $daily_report['avg_ph']; ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Staff Active Summary -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(59,130,246,0.1); padding: 0.8rem; border-radius: 10px; margin-bottom: 1rem; border: 1px solid rgba(59,130,246,0.2);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-users" style="color: #3b82f6;"></i>
+                            <span>Active Staff Today</span>
+                        </div>
+                        <span style="font-weight: 600; color: #3b82f6;"><?php echo $daily_report['staff_active']; ?> staff</span>
+                    </div>
+                    
+                    <!-- Download Buttons (Simulation) -->
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <button class="btn btn-sm" style="flex: 1; background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);" onclick="showNotification('PDF Report downloaded (simulation)', 'success')">
+                            <i class="fas fa-file-pdf"></i> PDF
+                        </button>
+                        <button class="btn btn-sm" style="flex: 1; background: rgba(74,222,128,0.2); color: #4ade80; border: 1px solid rgba(74,222,128,0.3);" onclick="showNotification('Excel Report downloaded (simulation)', 'success')">
+                            <i class="fas fa-file-excel"></i> Excel
+                        </button>
+                        <button class="btn btn-sm" style="flex: 1; background: rgba(251,191,36,0.2); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3);" onclick="showNotification('CSV Report downloaded (simulation)', 'success')">
+                            <i class="fas fa-file-csv"></i> CSV
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1776,14 +1910,34 @@ if(isset($_POST['action'])) {
             <div class="card">
                 <div class="card-header">
                     <span><i class="fas fa-history" style="color: #3b82f6;"></i> Recent Activities</span>
+                    <span class="status-badge" style="background: rgba(59,130,246,0.2); color: #3b82f6;">
+                        <i class="fas fa-sync-alt fa-spin"></i> Live
+                    </span>
                 </div>
                 <div style="max-height: 300px; overflow-y: auto;">
                     <?php if (!empty($recent_activities)): ?>
                         <?php foreach($recent_activities as $activity): ?>
-                        <div style="padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <div style="display: flex; justify-content: space-between;">
-                                <span><i class="fas fa-circle" style="font-size: 0.5rem; color: #4ade80;"></i> <?php echo $activity['action']; ?></span>
-                                <small style="color: rgba(255,255,255,0.4);"><?php echo date('h:i A', strtotime($activity['timestamp'])); ?></small>
+                        <div style="padding: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 0.8rem;">
+                            <?php 
+                            $icon = 'fas fa-circle';
+                            $color = '#4ade80';
+                            if ($activity['type'] == 'login') {
+                                $icon = 'fas fa-sign-in-alt';
+                                $color = '#3b82f6';
+                            } elseif ($activity['type'] == 'reading') {
+                                $icon = 'fas fa-file-alt';
+                                $color = '#fbbf24';
+                            } elseif ($activity['type'] == 'alert') {
+                                $icon = 'fas fa-exclamation-triangle';
+                                $color = '#ef4444';
+                            }
+                            ?>
+                            <i class="<?php echo $icon; ?>" style="color: <?php echo $color; ?>; font-size: 0.9rem;"></i>
+                            <div style="flex: 1;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="font-size: 0.9rem;"><?php echo $activity['action']; ?></span>
+                                    <small style="color: rgba(255,255,255,0.4);"><?php echo date('h:i A', strtotime($activity['timestamp'])); ?></small>
+                                </div>
                             </div>
                         </div>
                         <?php endforeach; ?>
@@ -2506,6 +2660,35 @@ if(isset($_POST['action'])) {
                     document.getElementById('reportPreview').innerHTML = html;
                 }
             });
+        }
+
+        // Show notification toast
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background: ${type === 'success' ? '#4ade80' : (type === 'warning' ? '#fbbf24' : '#3b82f6')};
+                color: ${type === 'success' ? '#142138' : 'white'};
+                padding: 1rem 1.5rem;
+                border-radius: 12px;
+                z-index: 9999;
+                animation: slideInRight 0.3s ease;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                gap: 0.8rem;
+                font-weight: 500;
+            `;
+            notification.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'}"></i> ${message}`;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
         }
     </script>
 </body>
