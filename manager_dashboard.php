@@ -1,21 +1,26 @@
 <?php
 // manager_dashboard_simulation.php
 session_start();
+require_once "config.php";
+
+// Check if user is logged in and is manager - REMOVE the simulation override
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'manager') {
+    header("Location: login.php");
+    exit();
+}
 
 // Set Philippines Time Zone
 date_default_timezone_set('Asia/Manila');
 
-// Simulation mode - set dummy session
-$_SESSION['user_id'] = 2;
-$_SESSION['full_name'] = 'Maria Santos';
-$_SESSION['role'] = 'manager';
-$_SESSION['email'] = 'manager@company.com';
+// Get actual user data from session (not simulation override)
+$manager_id = $_SESSION['user_id'];
+$manager_name = $_SESSION['full_name']; // This will come from actual login
+$manager_email = $_SESSION['email'];
 
-$manager_name = 'Maria Santos';
-$current_datetime = date('Y-m-d H:i:s'); // This will now be PH time
-$current_time_12hr = date('h:i:s A'); // 12-hour format with AM/PM
-$current_date = date('F j, Y'); // Full date format
-$current_day = date('l'); // Day of week
+$current_datetime = date('Y-m-d H:i:s');
+$current_time_12hr = date('h:i:s A');
+$current_date = date('F j, Y');
+$current_day = date('l');
 
 // Dummy data based sa database structure mo - lahat naka PH time
 $staff_assignments = [
@@ -24,7 +29,7 @@ $staff_assignments = [
         'full_name' => 'Pedro Reyes',
         'email' => 'staff1@company.com',
         'assigned_pond' => 'A-1',
-        'last_login' => date('Y-m-d H:i:s', strtotime('-2 hours')), // 2 hours ago PH time
+        'last_login' => date('Y-m-d H:i:s', strtotime('-2 hours')),
         'status' => 'active'
     ],
     [
@@ -32,7 +37,7 @@ $staff_assignments = [
         'full_name' => 'Ana Lopez',
         'email' => 'staff2@company.com',
         'assigned_pond' => 'B-2',
-        'last_login' => date('Y-m-d H:i:s', strtotime('-30 minutes')), // 30 mins ago PH time
+        'last_login' => date('Y-m-d H:i:s', strtotime('-30 minutes')),
         'status' => 'active'
     ]
 ];
@@ -48,7 +53,7 @@ $ponds_data = [
         'status' => 'warning',
         'staff' => 'Pedro Reyes',
         'location' => 'North Section',
-        'last_reading' => date('Y-m-d H:i:s', strtotime('-5 minutes')) // 5 mins ago PH time
+        'last_reading' => date('Y-m-d H:i:s', strtotime('-5 minutes'))
     ],
     'B-2' => [
         'pond_id' => 2,
@@ -59,7 +64,7 @@ $ponds_data = [
         'status' => 'critical',
         'staff' => 'Ana Lopez',
         'location' => 'South Section',
-        'last_reading' => date('Y-m-d H:i:s', strtotime('-2 minutes')) // 2 mins ago PH time
+        'last_reading' => date('Y-m-d H:i:s', strtotime('-2 minutes'))
     ]
 ];
 
@@ -71,7 +76,7 @@ $notifications = [
         'pond_name' => 'B-2',
         'message' => 'High organic level (82%) detected. Temperature above threshold (31.2°C).',
         'status' => 'unread',
-        'created_at' => date('Y-m-d H:i:s', strtotime('-2 minutes')), // 2 mins ago PH time
+        'created_at' => date('Y-m-d H:i:s', strtotime('-2 minutes')),
         'type' => 'critical'
     ],
     [
@@ -80,7 +85,7 @@ $notifications = [
         'pond_name' => 'A-1',
         'message' => 'Organic level approaching threshold (65%). Monitor closely.',
         'status' => 'unread',
-        'created_at' => date('Y-m-d H:i:s', strtotime('-15 minutes')), // 15 mins ago PH time
+        'created_at' => date('Y-m-d H:i:s', strtotime('-15 minutes')),
         'type' => 'warning'
     ],
     [
@@ -89,7 +94,7 @@ $notifications = [
         'pond_name' => 'A-1',
         'message' => 'Routine check: All systems normal',
         'status' => 'read',
-        'created_at' => date('Y-m-d H:i:s', strtotime('-1 day')), // 1 day ago PH time
+        'created_at' => date('Y-m-d H:i:s', strtotime('-1 day')),
         'type' => 'info'
     ]
 ];
@@ -104,10 +109,9 @@ $chart_data = [
 
 // Generate 24 hours of dummy data with PH time labels
 for ($i = 23; $i >= 0; $i--) {
-    $hour = date('H:00', strtotime("-$i hours")); // This will show actual hours in PH time
+    $hour = date('H:00', strtotime("-$i hours"));
     $chart_data['labels'][] = $hour;
     
-    // Simulate patterns
     $trend = sin($i * 0.3) * 10;
     $chart_data['organic'][] = round(60 + $trend + rand(-3, 3), 1);
     $chart_data['temperature'][] = round(28 + sin($i * 0.2) * 3 + rand(-1, 1), 1);
@@ -122,7 +126,7 @@ $recent_readings = [
         'organic_level' => 65,
         'water_temperature' => 28.5,
         'ph_level' => 7.2,
-        'detected_at' => date('Y-m-d H:i:s', strtotime('-5 minutes')), // 5 mins ago PH time
+        'detected_at' => date('Y-m-d H:i:s', strtotime('-5 minutes')),
         'status' => 'warning'
     ],
     [
@@ -131,7 +135,7 @@ $recent_readings = [
         'organic_level' => 82,
         'water_temperature' => 31.2,
         'ph_level' => 8.1,
-        'detected_at' => date('Y-m-d H:i:s', strtotime('-2 minutes')), // 2 mins ago PH time
+        'detected_at' => date('Y-m-d H:i:s', strtotime('-2 minutes')),
         'status' => 'critical'
     ],
     [
@@ -140,7 +144,7 @@ $recent_readings = [
         'organic_level' => 63,
         'water_temperature' => 28.2,
         'ph_level' => 7.1,
-        'detected_at' => date('Y-m-d H:i:s', strtotime('-15 minutes')), // 15 mins ago PH time
+        'detected_at' => date('Y-m-d H:i:s', strtotime('-15 minutes')),
         'status' => 'normal'
     ]
 ];
@@ -152,7 +156,6 @@ if(isset($_POST['action'])) {
     if($_POST['action'] == 'get_chart_data') {
         $period = $_POST['period'] ?? 'daily';
         
-        // Generate dummy chart data based on period with PH time
         $data = ['labels' => [], 'organic' => [], 'temperature' => [], 'ph' => []];
         
         if ($period == 'daily') {
@@ -191,7 +194,7 @@ if(isset($_POST['action'])) {
             'success' => true,
             'message' => 'Admin notified successfully',
             'notification_id' => $notification_id,
-            'timestamp' => date('Y-m-d H:i:s') // PH time
+            'timestamp' => date('Y-m-d H:i:s')
         ]);
         exit;
     }
@@ -199,8 +202,8 @@ if(isset($_POST['action'])) {
     if($_POST['action'] == 'get_live_updates') {
         echo json_encode([
             'notifications' => rand(1, 3),
-            'timestamp' => date('Y-m-d H:i:s'), // PH time
-            'time_12hr' => date('h:i:s A'), // PH time 12hr format
+            'timestamp' => date('Y-m-d H:i:s'),
+            'time_12hr' => date('h:i:s A'),
             'message' => 'New data available'
         ]);
         exit;
@@ -212,7 +215,7 @@ if(isset($_POST['action'])) {
         echo json_encode([
             'success' => true,
             'message' => 'Notification marked as read',
-            'timestamp' => date('Y-m-d H:i:s') // PH time
+            'timestamp' => date('Y-m-d H:i:s')
         ]);
         exit;
     }
@@ -245,6 +248,7 @@ if(isset($_POST['action'])) {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <style>
+        /* Copy all your existing CSS here - same as before */
         * {
             margin: 0;
             padding: 0;
@@ -327,6 +331,7 @@ if(isset($_POST['action'])) {
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            text-decoration: none;
         }
 
         .logout-btn:hover {
@@ -738,9 +743,10 @@ if(isset($_POST['action'])) {
                 <i class="fas fa-user-tie"></i>
                 <span>Manager – <?php echo htmlspecialchars($manager_name); ?></span>
             </div>
-            <button class="logout-btn" onclick="simulateLogout()">
+            <!-- CHANGE THIS: Replace button with link to logout.php -->
+            <a href="logout.php" class="logout-btn" onclick="return confirm('Logout from Manager Dashboard?')">
                 <i class="fas fa-sign-out-alt"></i> Logout
-            </button>
+            </a>
         </div>
     </nav>
 
@@ -768,6 +774,7 @@ if(isset($_POST['action'])) {
             </div>
         </div>
 
+        <!-- Rest of your HTML remains the same -->
         <!-- Staff & Pond Assignments -->
         <div class="grid-2">
             <!-- Staff Assignments Card -->
@@ -859,7 +866,6 @@ if(isset($_POST['action'])) {
                     <div class="timestamp">
                         <i class="far fa-clock"></i> Last reading: <?php echo date('h:i:s A', strtotime($data['last_reading'])); ?>
                         <?php 
-                        // Calculate time difference
                         $time_diff = time() - strtotime($data['last_reading']);
                         if($time_diff < 60) {
                             echo '<span style="color: #4ade80; margin-left: auto;">Just now</span>';
@@ -1535,24 +1541,11 @@ if(isset($_POST['action'])) {
             }, 2000);
         }
 
-        // Simulate logout
+        // Remove the simulateLogout function since we're using direct link to logout.php
+        // Or keep it but redirect to logout.php
         function simulateLogout() {
-            if (confirm('Simulation: Logout from Manager Dashboard?')) {
-                showNotification('Logging out...', 'info');
-                
-                setTimeout(() => {
-                    // Simulate logout screen
-                    document.body.innerHTML = `
-                        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #142138; color: white; flex-direction: column; gap: 1rem;">
-                            <i class="fas fa-check-circle" style="color: #4ade80; font-size: 4rem;"></i>
-                            <h2>Logged Out Successfully</h2>
-                            <p style="color: rgba(255,255,255,0.6);">This is a simulation. Click below to return to dashboard.</p>
-                            <button onclick="window.location.reload()" style="background: #3b82f6; color: white; border: none; padding: 0.8rem 2rem; border-radius: 50px; cursor: pointer; margin-top: 1rem; font-size: 1rem;">
-                                <i class="fas fa-redo-alt"></i> Reload Dashboard
-                            </button>
-                        </div>
-                    `;
-                }, 1500);
+            if (confirm('Logout from Manager Dashboard?')) {
+                window.location.href = 'logout.php';
             }
         }
 
