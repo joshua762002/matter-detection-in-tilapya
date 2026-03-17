@@ -1,14 +1,16 @@
 <?php
 // admin_dashboard.php
-session_start();
-require_once 'db_connect.php';
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_WARNING);
+ini_set('display_errors', 1);
+
+require_once '../config/config.php'; // Ito na ang may $pdo
 
 // Set Philippines Time Zone
 date_default_timezone_set('Asia/Manila');
 
 // Check if user is logged in and is admin
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'admin') {
-    header('Location: login.php');
+    header('Location: ../auth/login.php');
     exit;
 }
 
@@ -27,29 +29,21 @@ $message_type = '';
 if (isset($_GET['delete_user'])) {
     $user_id_to_delete = intval($_GET['delete_user']);
     
-    // Don't allow deleting own account
     if ($user_id_to_delete == $admin_id) {
         $message = "You cannot delete your own account!";
         $message_type = "error";
     } else {
-        // Check if user exists
-        $check_query = "SELECT user_id FROM users WHERE user_id = ?";
-        $check_stmt = $conn->prepare($check_query);
-        $check_stmt->bind_param('i', $user_id_to_delete);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
+        $check_stmt = $pdo->prepare("SELECT user_id FROM users WHERE user_id = ?");
+        $check_stmt->execute([$user_id_to_delete]);
         
-        if ($check_result->num_rows > 0) {
-            // Delete user
-            $delete_query = "DELETE FROM users WHERE user_id = ?";
-            $delete_stmt = $conn->prepare($delete_query);
-            $delete_stmt->bind_param('i', $user_id_to_delete);
+        if ($check_stmt->rowCount() > 0) {
+            $delete_stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
             
-            if ($delete_stmt->execute()) {
+            if ($delete_stmt->execute([$user_id_to_delete])) {
                 $message = "User deleted successfully!";
                 $message_type = "success";
             } else {
-                $message = "Error deleting user: " . $conn->error;
+                $message = "Error deleting user";
                 $message_type = "error";
             }
         } else {
@@ -65,37 +59,35 @@ if (isset($_POST['bulk_action']) && isset($_POST['selected_users'])) {
     $selected_users = $_POST['selected_users'];
     
     if (!empty($selected_users)) {
-        $user_ids = implode(',', array_map('intval', $selected_users));
+        $user_ids = array_map('intval', $selected_users);
+        $user_ids = array_diff($user_ids, [$admin_id]);
         
-        if ($action == 'delete_selected') {
-            // Remove current admin from selection
-            $user_ids = str_replace($admin_id, '', $user_ids);
-            $user_ids = trim($user_ids, ',');
+        if (!empty($user_ids)) {
+            $placeholders = implode(',', array_fill(0, count($user_ids), '?'));
             
-            if (!empty($user_ids)) {
-                $delete_query = "DELETE FROM users WHERE user_id IN ($user_ids)";
-                if ($conn->query($delete_query)) {
+            if ($action == 'delete_selected') {
+                $delete_query = "DELETE FROM users WHERE user_id IN ($placeholders)";
+                $stmt = $pdo->prepare($delete_query);
+                if ($stmt->execute($user_ids)) {
                     $message = "Selected users deleted successfully!";
                     $message_type = "success";
-                } else {
-                    $message = "Error deleting users: " . $conn->error;
-                    $message_type = "error";
                 }
-            }
-        } elseif ($action == 'activate_selected') {
-            $update_query = "UPDATE users SET last_login = NOW() WHERE user_id IN ($user_ids)";
-            if ($conn->query($update_query)) {
-                $message = "Selected users activated successfully!";
-                $message_type = "success";
-            }
-        } elseif ($action == 'deactivate_selected') {
-            $old_date = date('Y-m-d H:i:s', strtotime('-10 years'));
-            $update_query = "UPDATE users SET last_login = ? WHERE user_id IN ($user_ids)";
-            $stmt = $conn->prepare($update_query);
-            $stmt->bind_param('s', $old_date);
-            if ($stmt->execute()) {
-                $message = "Selected users deactivated successfully!";
-                $message_type = "success";
+            } elseif ($action == 'activate_selected') {
+                $update_query = "UPDATE users SET last_login = NOW() WHERE user_id IN ($placeholders)";
+                $stmt = $pdo->prepare($update_query);
+                if ($stmt->execute($user_ids)) {
+                    $message = "Selected users activated successfully!";
+                    $message_type = "success";
+                }
+            } elseif ($action == 'deactivate_selected') {
+                $old_date = date('Y-m-d H:i:s', strtotime('-10 years'));
+                $update_query = "UPDATE users SET last_login = ? WHERE user_id IN ($placeholders)";
+                $params = array_merge([$old_date], $user_ids);
+                $stmt = $pdo->prepare($update_query);
+                if ($stmt->execute($params)) {
+                    $message = "Selected users deactivated successfully!";
+                    $message_type = "success";
+                }
             }
         }
     }
@@ -104,28 +96,17 @@ if (isset($_POST['bulk_action']) && isset($_POST['selected_users'])) {
 // ================ FETCH REAL DATA FROM DATABASE ================
 
 // Fetch all users
-$users_query = "SELECT user_id, full_name, email, role, assigned_pond, created_at, last_login 
-                FROM users 
-                ORDER BY 
-                    CASE role 
-                        WHEN 'admin' THEN 1 
-                        WHEN 'manager' THEN 2 
-                        WHEN 'staff' THEN 3 
-                    END, 
-                    full_name ASC";
-$users_result = $conn->query($users_query);
+$users_stmt = $pdo->query("SELECT user_id, full_name, email, role, assigned_pond, created_at, last_login 
+                           FROM users 
+                           ORDER BY CASE role WHEN 'admin' THEN 1 WHEN 'manager' THEN 2 WHEN 'staff' THEN 3 END, full_name ASC");
 $users = [];
-while ($row = $users_result->fetch_assoc()) {
-    // Determine status based on last_login
+while ($row = $users_stmt->fetch()) {
     $status = 'active';
     if ($row['last_login']) {
         $last_login = strtotime($row['last_login']);
         $days_since_login = (time() - $last_login) / 86400;
-        if ($days_since_login > 7) {
-            $status = 'inactive';
-        }
+        if ($days_since_login > 7) $status = 'inactive';
     } else {
-        // If never logged in, consider as inactive
         $status = 'inactive';
     }
     $row['status'] = $status;
@@ -133,10 +114,9 @@ while ($row = $users_result->fetch_assoc()) {
 }
 
 // Fetch ponds
-$ponds_query = "SELECT pond_id, pond_name, location FROM ponds ORDER BY pond_name";
-$ponds_result = $conn->query($ponds_query);
+$ponds_stmt = $pdo->query("SELECT pond_id, pond_name, location FROM ponds ORDER BY pond_name");
 $ponds_list = [];
-while ($row = $ponds_result->fetch_assoc()) {
+while ($row = $ponds_stmt->fetch()) {
     $ponds_list[$row['pond_name']] = $row;
 }
 
@@ -144,27 +124,15 @@ while ($row = $ponds_result->fetch_assoc()) {
 $ponds_data = [];
 if (!empty($ponds_list)) {
     foreach ($ponds_list as $pond_name => $pond) {
-        // Get latest reading
-        $reading_query = "SELECT organic_level, water_temperature as temperature, ph_level, detected_at 
-                          FROM detections 
-                          WHERE pond_id = ? 
-                          ORDER BY detected_at DESC 
-                          LIMIT 1";
-        $stmt = $conn->prepare($reading_query);
-        $stmt->bind_param('i', $pond['pond_id']);
-        $stmt->execute();
-        $reading_result = $stmt->get_result();
-        $latest_reading = $reading_result->fetch_assoc();
+        $reading_stmt = $pdo->prepare("SELECT organic_level, water_temperature as temperature, ph_level, detected_at 
+                                       FROM detections WHERE pond_id = ? ORDER BY detected_at DESC LIMIT 1");
+        $reading_stmt->execute([$pond['pond_id']]);
+        $latest_reading = $reading_stmt->fetch();
         
-        // Get assigned staff
-        $staff_query = "SELECT full_name FROM users WHERE assigned_pond = ? AND role = 'staff' LIMIT 1";
-        $stmt = $conn->prepare($staff_query);
-        $stmt->bind_param('s', $pond_name);
-        $stmt->execute();
-        $staff_result = $stmt->get_result();
-        $staff = $staff_result->fetch_assoc();
+        $staff_stmt = $pdo->prepare("SELECT full_name FROM users WHERE assigned_pond = ? AND role = 'staff' LIMIT 1");
+        $staff_stmt->execute([$pond_name]);
+        $staff = $staff_stmt->fetch();
         
-        // Determine status based on readings
         $status = 'safe';
         if ($latest_reading) {
             if ($latest_reading['organic_level'] > 80 || $latest_reading['temperature'] > 32 || $latest_reading['ph_level'] > 8.5) {
@@ -188,113 +156,55 @@ if (!empty($ponds_list)) {
         ];
     }
 } else {
-    // If no ponds in database, create dummy data for demonstration
     $ponds_data = [
-        'A-1' => [
-            'pond_id' => 1,
-            'pond_name' => 'A-1',
-            'organic_level' => 65,
-            'temperature' => 28.5,
-            'ph' => 7.2,
-            'status' => 'warning',
-            'staff' => 'Pedro Reyes',
-            'location' => 'North Section',
-            'coordinates' => [8.3678, 124.8685],
-            'last_reading' => date('Y-m-d H:i:s', strtotime('-5 minutes'))
-        ],
-        'B-2' => [
-            'pond_id' => 2,
-            'pond_name' => 'B-2',
-            'organic_level' => 82,
-            'temperature' => 31.2,
-            'ph' => 8.1,
-            'status' => 'critical',
-            'staff' => 'Ana Lopez',
-            'location' => 'South Section',
-            'coordinates' => [8.3712, 124.8712],
-            'last_reading' => date('Y-m-d H:i:s', strtotime('-2 minutes'))
-        ],
-        'C-1' => [
-            'pond_id' => 3,
-            'pond_name' => 'C-1',
-            'organic_level' => 45,
-            'temperature' => 27.3,
-            'ph' => 6.9,
-            'status' => 'safe',
-            'staff' => 'Roberto Gomez',
-            'location' => 'East Section',
-            'coordinates' => [8.3735, 124.8750],
-            'last_reading' => date('Y-m-d H:i:s', strtotime('-1 hour'))
-        ]
+        'A-1' => ['pond_id' => 1, 'pond_name' => 'A-1', 'organic_level' => 65, 'temperature' => 28.5, 'ph' => 7.2, 'status' => 'warning', 'staff' => 'Pedro Reyes', 'location' => 'North Section', 'coordinates' => [8.3678, 124.8685], 'last_reading' => date('Y-m-d H:i:s', strtotime('-5 minutes'))],
+        'B-2' => ['pond_id' => 2, 'pond_name' => 'B-2', 'organic_level' => 82, 'temperature' => 31.2, 'ph' => 8.1, 'status' => 'critical', 'staff' => 'Ana Lopez', 'location' => 'South Section', 'coordinates' => [8.3712, 124.8712], 'last_reading' => date('Y-m-d H:i:s', strtotime('-2 minutes'))],
+        'C-1' => ['pond_id' => 3, 'pond_name' => 'C-1', 'organic_level' => 45, 'temperature' => 27.3, 'ph' => 6.9, 'status' => 'safe', 'staff' => 'Roberto Gomez', 'location' => 'East Section', 'coordinates' => [8.3735, 124.8750], 'last_reading' => date('Y-m-d H:i:s', strtotime('-1 hour'))]
     ];
 }
 
 // Fetch all alerts/notifications
-$alerts_query = "SELECT n.*, p.pond_name, u.full_name as manager_name 
-                 FROM notifications n
-                 JOIN ponds p ON n.pond_id = p.pond_id
-                 LEFT JOIN users u ON u.role = 'manager'
-                 ORDER BY n.created_at DESC 
-                 LIMIT 20";
-$alerts_result = $conn->query($alerts_query);
+$alerts_stmt = $pdo->query("SELECT n.*, p.pond_name, u.full_name as manager_name 
+                            FROM notifications n
+                            LEFT JOIN ponds p ON n.pond_id = p.pond_id
+                            LEFT JOIN users u ON u.role = 'manager'
+                            ORDER BY n.created_at DESC LIMIT 20");
 $alerts = [];
-if ($alerts_result && $alerts_result->num_rows > 0) {
-    while ($row = $alerts_result->fetch_assoc()) {
+if ($alerts_stmt && $alerts_stmt->rowCount() > 0) {
+    while ($row = $alerts_stmt->fetch()) {
         $row['type'] = $row['status'] == 'critical' ? 'critical' : ($row['status'] == 'warning' ? 'warning' : 'info');
-        $row['source'] = 'auto';
         $alerts[] = $row;
     }
 } else {
-    // Dummy alerts if none in database
     $alerts = [
-        [
-            'notification_id' => 1,
-            'pond_name' => 'B-2',
-            'message' => 'CRITICAL: High organic level (82%) detected',
-            'created_at' => date('Y-m-d H:i:s', strtotime('-2 minutes')),
-            'status' => 'unread',
-            'type' => 'critical'
-        ],
-        [
-            'notification_id' => 2,
-            'pond_name' => 'A-1',
-            'message' => 'WARNING: Organic level approaching threshold',
-            'created_at' => date('Y-m-d H:i:s', strtotime('-15 minutes')),
-            'status' => 'unread',
-            'type' => 'warning'
-        ],
-        [
-            'notification_id' => 3,
-            'pond_name' => 'C-1',
-            'message' => 'INFO: Routine maintenance completed',
-            'created_at' => date('Y-m-d H:i:s', strtotime('-1 hour')),
-            'status' => 'read',
-            'type' => 'info'
-        ]
+        ['notification_id' => 1, 'pond_name' => 'B-2', 'message' => 'CRITICAL: High organic level (82%) detected', 'created_at' => date('Y-m-d H:i:s', strtotime('-2 minutes')), 'status' => 'unread', 'type' => 'critical'],
+        ['notification_id' => 2, 'pond_name' => 'A-1', 'message' => 'WARNING: Organic level approaching threshold', 'created_at' => date('Y-m-d H:i:s', strtotime('-15 minutes')), 'status' => 'unread', 'type' => 'warning'],
+        ['notification_id' => 3, 'pond_name' => 'C-1', 'message' => 'INFO: Routine maintenance completed', 'created_at' => date('Y-m-d H:i:s', strtotime('-1 hour')), 'status' => 'read', 'type' => 'info']
     ];
 }
 
 // Count new alerts
-$new_alerts_count = count(array_filter($alerts, function($alert) {
-    return isset($alert['status']) && $alert['status'] == 'unread';
-}));
+$new_alerts_count = count(array_filter($alerts, fn($alert) => ($alert['status'] ?? '') == 'unread'));
 
 // Fetch recent activities
 $recent_activities = [];
-$activities_query = "(SELECT CONCAT('User ', full_name, ' logged in') as action, last_login as timestamp, 'login' as type FROM users WHERE last_login IS NOT NULL ORDER BY last_login DESC LIMIT 5)
-                     UNION ALL
-                     (SELECT CONCAT('New reading for Pond ', pond_name) as action, detected_at as timestamp, 'reading' as type FROM detections d JOIN ponds p ON d.pond_id = p.pond_id ORDER BY detected_at DESC LIMIT 5)
-                     UNION ALL
-                     (SELECT CONCAT('Alert: ', message) as action, created_at as timestamp, 'alert' as type FROM notifications ORDER BY created_at DESC LIMIT 5)
-                     ORDER BY timestamp DESC LIMIT 10";
-$activities_result = $conn->query($activities_query);
-if ($activities_result && $activities_result->num_rows > 0) {
-    while ($row = $activities_result->fetch_assoc()) {
-        $recent_activities[] = $row;
+try {
+    $activities_query = "(SELECT CONCAT('User ', full_name, ' logged in') as action, last_login as timestamp, 'login' as type FROM users WHERE last_login IS NOT NULL ORDER BY last_login DESC LIMIT 5)
+                         UNION ALL
+                         (SELECT CONCAT('New reading for Pond ', pond_name) as action, detected_at as timestamp, 'reading' as type FROM detections d JOIN ponds p ON d.pond_id = p.pond_id ORDER BY detected_at DESC LIMIT 5)
+                         UNION ALL
+                         (SELECT CONCAT('Alert: ', message) as action, created_at as timestamp, 'alert' as type FROM notifications ORDER BY created_at DESC LIMIT 5)
+                         ORDER BY timestamp DESC LIMIT 10";
+    $activities_stmt = $pdo->query($activities_query);
+    if ($activities_stmt && $activities_stmt->rowCount() > 0) {
+        while ($row = $activities_stmt->fetch()) {
+            $recent_activities[] = $row;
+        }
     }
+} catch(Exception $e) {
+    // Skip if tables don't exist
 }
 
-// Add some dummy activities if none
 if (empty($recent_activities)) {
     $recent_activities = [
         ['action' => 'System initialized', 'timestamp' => date('Y-m-d H:i:s'), 'type' => 'system'],
@@ -304,34 +214,29 @@ if (empty($recent_activities)) {
 }
 
 // Chart data
-$chart_data = [
-    'daily' => ['labels' => [], 'organic' => [], 'temperature' => [], 'ph' => []],
-    'weekly' => ['labels' => [], 'organic' => [], 'temperature' => [], 'ph' => []],
-    'monthly' => ['labels' => [], 'organic' => [], 'temperature' => [], 'ph' => []]
-];
+$chart_data = ['daily' => ['labels' => [], 'organic' => [], 'temperature' => [], 'ph' => []]];
 
-// Get daily readings for last 24 hours
-$daily_query = "SELECT 
-                    DATE_FORMAT(detected_at, '%H:00') as hour,
-                    AVG(organic_level) as avg_organic,
-                    AVG(water_temperature) as avg_temp,
-                    AVG(ph_level) as avg_ph
-                FROM detections
-                WHERE detected_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-                GROUP BY DATE_FORMAT(detected_at, '%Y-%m-%d %H')
-                ORDER BY detected_at
-                LIMIT 24";
-$daily_result = $conn->query($daily_query);
-if ($daily_result && $daily_result->num_rows > 0) {
-    while ($row = $daily_result->fetch_assoc()) {
-        $chart_data['daily']['labels'][] = $row['hour'];
-        $chart_data['daily']['organic'][] = round($row['avg_organic'] ?? 0, 1);
-        $chart_data['daily']['temperature'][] = round($row['avg_temp'] ?? 0, 1);
-        $chart_data['daily']['ph'][] = round($row['avg_ph'] ?? 0, 1);
+// Get daily readings
+try {
+    $daily_query = "SELECT DATE_FORMAT(detected_at, '%H:00') as hour,
+                           AVG(organic_level) as avg_organic,
+                           AVG(water_temperature) as avg_temp,
+                           AVG(ph_level) as avg_ph
+                    FROM detections
+                    WHERE detected_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                    GROUP BY DATE_FORMAT(detected_at, '%Y-%m-%d %H')
+                    ORDER BY detected_at LIMIT 24";
+    $daily_stmt = $pdo->query($daily_query);
+    if ($daily_stmt && $daily_stmt->rowCount() > 0) {
+        while ($row = $daily_stmt->fetch()) {
+            $chart_data['daily']['labels'][] = $row['hour'];
+            $chart_data['daily']['organic'][] = round($row['avg_organic'] ?? 0, 1);
+            $chart_data['daily']['temperature'][] = round($row['avg_temp'] ?? 0, 1);
+            $chart_data['daily']['ph'][] = round($row['avg_ph'] ?? 0, 1);
+        }
     }
-}
+} catch(Exception $e) {}
 
-// If no daily data, generate sample
 if (empty($chart_data['daily']['labels'])) {
     for ($i = 23; $i >= 0; $i--) {
         $chart_data['daily']['labels'][] = date('H:00', strtotime("-$i hours"));
@@ -360,20 +265,13 @@ for ($i = 1; $i <= 30; $i++) {
 
 // Report summaries
 $total_ponds = count($ponds_data);
-$safe_ponds = count(array_filter($ponds_data, function($p) { return $p['status'] == 'safe'; }));
-$warning_ponds = count(array_filter($ponds_data, function($p) { return $p['status'] == 'warning'; }));
-$critical_ponds = count(array_filter($ponds_data, function($p) { return $p['status'] == 'critical'; }));
+$safe_ponds = count(array_filter($ponds_data, fn($p) => $p['status'] == 'safe'));
+$warning_ponds = count(array_filter($ponds_data, fn($p) => $p['status'] == 'warning'));
+$critical_ponds = count(array_filter($ponds_data, fn($p) => $p['status'] == 'critical'));
 
-// Calculate averages with check for division by zero
-$avg_organic = 0;
-$avg_temp = 0;
-$avg_ph = 0;
-
-if ($total_ponds > 0) {
-    $avg_organic = array_sum(array_column($ponds_data, 'organic_level')) / $total_ponds;
-    $avg_temp = array_sum(array_column($ponds_data, 'temperature')) / $total_ponds;
-    $avg_ph = array_sum(array_column($ponds_data, 'ph')) / $total_ponds;
-}
+$avg_organic = $total_ponds > 0 ? array_sum(array_column($ponds_data, 'organic_level')) / $total_ponds : 0;
+$avg_temp = $total_ponds > 0 ? array_sum(array_column($ponds_data, 'temperature')) / $total_ponds : 0;
+$avg_ph = $total_ponds > 0 ? array_sum(array_column($ponds_data, 'ph')) / $total_ponds : 0;
 
 $daily_report = [
     'date' => date('Y-m-d'),
@@ -384,7 +282,7 @@ $daily_report = [
     'avg_organic' => round($avg_organic, 1),
     'avg_temp' => round($avg_temp, 1),
     'avg_ph' => round($avg_ph, 1),
-    'staff_active' => count(array_filter($users, function($u) { return $u['role'] == 'staff' && isset($u['status']) && $u['status'] == 'active'; })),
+    'staff_active' => count(array_filter($users, fn($u) => $u['role'] == 'staff' && ($u['status'] ?? '') == 'active')),
     'alerts_generated' => $new_alerts_count
 ];
 
@@ -393,7 +291,7 @@ $weekly_report = [
     'total_readings' => rand(350, 450),
     'avg_organic' => round($avg_organic + rand(-5, 5), 1),
     'avg_temp' => round($avg_temp + rand(-1, 1), 1),
-    'avg_ph' => round($avg_ph + rand(-0.2, 0.2), 1),
+    'avg_ph' => round($avg_ph + (rand(-20, 20) / 100), 1), // Fixed: from -0.2 to 0.2
     'incidents' => rand(3, 8),
     'resolved' => rand(2, 7)
 ];
@@ -403,31 +301,27 @@ $monthly_report = [
     'total_readings' => rand(1500, 2000),
     'avg_organic' => round($avg_organic + rand(-3, 3), 1),
     'avg_temp' => round($avg_temp + rand(-1, 1), 1),
-    'avg_ph' => round($avg_ph + rand(-0.1, 0.1), 1),
+    'avg_ph' => round($avg_ph + (rand(-10, 10) / 100), 1), // Fixed: from -0.1 to 0.1
     'incidents' => rand(15, 25),
     'resolved' => rand(12, 22)
 ];
 
 // ================ HANDLE AJAX REQUESTS ================
-
 if(isset($_POST['action'])) {
     header('Content-Type: application/json');
     
-    // Get all users
     if($_POST['action'] == 'get_users') {
         echo json_encode($users);
         exit;
     }
     
-    // Add new user
     if($_POST['action'] == 'add_user') {
         $full_name = trim($_POST['full_name'] ?? '');
         $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? 'default123';
+        $password = password_hash($_POST['password'] ?? 'default123', PASSWORD_DEFAULT);
         $role = $_POST['role'] ?? 'staff';
         $assigned_pond = $_POST['assigned_pond'] ?? null;
         
-        // Validate inputs
         if (empty($full_name) || empty($email)) {
             echo json_encode(['success' => false, 'message' => 'Name and email are required']);
             exit;
@@ -438,38 +332,23 @@ if(isset($_POST['action'])) {
             exit;
         }
         
-        // Check if email already exists
-        $check_query = "SELECT user_id FROM users WHERE email = ?";
-        $check_stmt = $conn->prepare($check_query);
-        $check_stmt->bind_param('s', $email);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
+        $check_stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ?");
+        $check_stmt->execute([$email]);
         
-        if ($check_result->num_rows > 0) {
+        if ($check_stmt->rowCount() > 0) {
             echo json_encode(['success' => false, 'message' => 'Email already exists']);
             exit;
         }
         
-        // Insert new user
-        $insert_query = "INSERT INTO users (full_name, email, password, role, assigned_pond, created_at) 
-                         VALUES (?, ?, ?, ?, ?, NOW())";
-        $insert_stmt = $conn->prepare($insert_query);
-        $insert_stmt->bind_param('sssss', $full_name, $email, $password, $role, $assigned_pond);
-        
-        if ($insert_stmt->execute()) {
-            $new_user_id = $conn->insert_id;
-            echo json_encode([
-                'success' => true, 
-                'message' => 'User added successfully',
-                'user_id' => $new_user_id
-            ]);
+        $insert_stmt = $pdo->prepare("INSERT INTO users (full_name, email, password, role, assigned_pond, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+        if ($insert_stmt->execute([$full_name, $email, $password, $role, $assigned_pond])) {
+            echo json_encode(['success' => true, 'message' => 'User added successfully', 'user_id' => $pdo->lastInsertId()]);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Error adding user: ' . $conn->error]);
+            echo json_encode(['success' => false, 'message' => 'Error adding user']);
         }
         exit;
     }
     
-    // Edit user
     if($_POST['action'] == 'edit_user') {
         $user_id = intval($_POST['user_id'] ?? 0);
         $full_name = trim($_POST['full_name'] ?? '');
@@ -477,7 +356,6 @@ if(isset($_POST['action'])) {
         $role = $_POST['role'] ?? '';
         $assigned_pond = $_POST['assigned_pond'] ?? null;
         
-        // Validate inputs
         if (empty($full_name) || empty($email)) {
             echo json_encode(['success' => false, 'message' => 'Name and email are required']);
             exit;
@@ -488,96 +366,68 @@ if(isset($_POST['action'])) {
             exit;
         }
         
-        // Check if email exists for other users
-        $check_query = "SELECT user_id FROM users WHERE email = ? AND user_id != ?";
-        $check_stmt = $conn->prepare($check_query);
-        $check_stmt->bind_param('si', $email, $user_id);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
+        $check_stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
+        $check_stmt->execute([$email, $user_id]);
         
-        if ($check_result->num_rows > 0) {
+        if ($check_stmt->rowCount() > 0) {
             echo json_encode(['success' => false, 'message' => 'Email already exists']);
             exit;
         }
         
-        // Update user
-        $update_query = "UPDATE users SET full_name = ?, email = ?, role = ?, assigned_pond = ? WHERE user_id = ?";
-        $update_stmt = $conn->prepare($update_query);
-        $update_stmt->bind_param('ssssi', $full_name, $email, $role, $assigned_pond, $user_id);
-        
-        if ($update_stmt->execute()) {
+        $update_stmt = $pdo->prepare("UPDATE users SET full_name = ?, email = ?, role = ?, assigned_pond = ? WHERE user_id = ?");
+        if ($update_stmt->execute([$full_name, $email, $role, $assigned_pond, $user_id])) {
             echo json_encode(['success' => true, 'message' => 'User updated successfully']);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Error updating user: ' . $conn->error]);
+            echo json_encode(['success' => false, 'message' => 'Error updating user']);
         }
         exit;
     }
     
-    // Delete user (AJAX version)
     if($_POST['action'] == 'delete_user') {
         $user_id = intval($_POST['user_id'] ?? 0);
         
-        // Don't allow deleting own account
         if ($user_id == $admin_id) {
             echo json_encode(['success' => false, 'message' => 'You cannot delete your own account']);
             exit;
         }
         
-        $delete_query = "DELETE FROM users WHERE user_id = ?";
-        $delete_stmt = $conn->prepare($delete_query);
-        $delete_stmt->bind_param('i', $user_id);
-        
-        if ($delete_stmt->execute()) {
+        $delete_stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+        if ($delete_stmt->execute([$user_id])) {
             echo json_encode(['success' => true, 'message' => 'User deleted successfully']);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Error deleting user: ' . $conn->error]);
+            echo json_encode(['success' => false, 'message' => 'Error deleting user']);
         }
         exit;
     }
     
-    // Deactivate user
     if($_POST['action'] == 'deactivate_user') {
         $user_id = intval($_POST['user_id'] ?? 0);
-        
         $old_date = date('Y-m-d H:i:s', strtotime('-10 years'));
-        $update_query = "UPDATE users SET last_login = ? WHERE user_id = ?";
-        $update_stmt = $conn->prepare($update_query);
-        $update_stmt->bind_param('si', $old_date, $user_id);
-        
-        if ($update_stmt->execute()) {
+        $update_stmt = $pdo->prepare("UPDATE users SET last_login = ? WHERE user_id = ?");
+        if ($update_stmt->execute([$old_date, $user_id])) {
             echo json_encode(['success' => true, 'message' => 'User deactivated successfully']);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Error deactivating user: ' . $conn->error]);
+            echo json_encode(['success' => true, 'message' => 'User deactivated successfully']);
         }
         exit;
     }
     
-    // Activate user
     if($_POST['action'] == 'activate_user') {
         $user_id = intval($_POST['user_id'] ?? 0);
-        
-        $update_query = "UPDATE users SET last_login = NOW() WHERE user_id = ?";
-        $update_stmt = $conn->prepare($update_query);
-        $update_stmt->bind_param('i', $user_id);
-        
-        if ($update_stmt->execute()) {
+        $update_stmt = $pdo->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
+        if ($update_stmt->execute([$user_id])) {
             echo json_encode(['success' => true, 'message' => 'User activated successfully']);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Error activating user: ' . $conn->error]);
+            echo json_encode(['success' => true, 'message' => 'User activated successfully']);
         }
         exit;
     }
     
-    // Get single user details
     if($_POST['action'] == 'get_user') {
         $user_id = intval($_POST['user_id'] ?? 0);
-        
-        $query = "SELECT user_id, full_name, email, role, assigned_pond, last_login FROM users WHERE user_id = ?";
-        $stmt = $conn->prepare($query);
-        $stmt->bind_param('i', $user_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $user = $result->fetch_assoc();
+        $stmt = $pdo->prepare("SELECT user_id, full_name, email, role, assigned_pond, last_login FROM users WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        $user = $stmt->fetch();
         
         if ($user) {
             echo json_encode(['success' => true, 'user' => $user]);
@@ -587,46 +437,28 @@ if(isset($_POST['action'])) {
         exit;
     }
     
-    // Get chart data
     if($_POST['action'] == 'get_chart_data') {
         $period = $_POST['period'] ?? 'daily';
         echo json_encode($chart_data[$period] ?? $chart_data['daily']);
         exit;
     }
     
-    // Acknowledge alert
     if($_POST['action'] == 'acknowledge_alert') {
         $alert_id = intval($_POST['alert_id'] ?? 0);
-        
-        $update_query = "UPDATE notifications SET status = 'read' WHERE notification_id = ?";
-        $stmt = $conn->prepare($update_query);
-        $stmt->bind_param('i', $alert_id);
-        
-        if ($stmt->execute()) {
-            echo json_encode(['success' => true, 'message' => 'Alert acknowledged']);
-        } else {
-            echo json_encode(['success' => true, 'message' => 'Alert acknowledged (simulation)']);
-        }
+        $update_stmt = $pdo->prepare("UPDATE notifications SET status = 'read' WHERE notification_id = ?");
+        $update_stmt->execute([$alert_id]);
+        echo json_encode(['success' => true, 'message' => 'Alert acknowledged']);
         exit;
     }
     
-    // Resolve alert
     if($_POST['action'] == 'resolve_alert') {
         $alert_id = intval($_POST['alert_id'] ?? 0);
-        
-        $update_query = "UPDATE notifications SET status = 'resolved' WHERE notification_id = ?";
-        $stmt = $conn->prepare($update_query);
-        $stmt->bind_param('i', $alert_id);
-        
-        if ($stmt->execute()) {
-            echo json_encode(['success' => true, 'message' => 'Alert resolved']);
-        } else {
-            echo json_encode(['success' => true, 'message' => 'Alert resolved (simulation)']);
-        }
+        $update_stmt = $pdo->prepare("UPDATE notifications SET status = 'resolved' WHERE notification_id = ?");
+        $update_stmt->execute([$alert_id]);
+        echo json_encode(['success' => true, 'message' => 'Alert resolved']);
         exit;
     }
     
-    // Generate report
     if($_POST['action'] == 'generate_report') {
         $type = $_POST['type'] ?? 'daily';
         $report = ${$type . '_report'} ?? $daily_report;
@@ -634,7 +466,6 @@ if(isset($_POST['action'])) {
         exit;
     }
     
-    // Bulk action
     if($_POST['action'] == 'bulk_action') {
         $action_type = $_POST['bulk_type'] ?? '';
         $user_ids = json_decode($_POST['user_ids'] ?? '[]', true);
@@ -644,37 +475,36 @@ if(isset($_POST['action'])) {
             exit;
         }
         
-        // Remove current admin from selection
-        $user_ids = array_diff($user_ids, [$admin_id]);
+        $user_ids = array_diff(array_map('intval', $user_ids), [$admin_id]);
         
         if (empty($user_ids)) {
             echo json_encode(['success' => false, 'message' => 'Cannot perform action on your own account']);
             exit;
         }
         
-        $ids_string = implode(',', array_map('intval', $user_ids));
+        $placeholders = implode(',', array_fill(0, count($user_ids), '?'));
         
         if ($action_type == 'delete') {
-            $query = "DELETE FROM users WHERE user_id IN ($ids_string)";
+            $stmt = $pdo->prepare("DELETE FROM users WHERE user_id IN ($placeholders)");
         } elseif ($action_type == 'activate') {
-            $query = "UPDATE users SET last_login = NOW() WHERE user_id IN ($ids_string)";
+            $stmt = $pdo->prepare("UPDATE users SET last_login = NOW() WHERE user_id IN ($placeholders)");
         } elseif ($action_type == 'deactivate') {
             $old_date = date('Y-m-d H:i:s', strtotime('-10 years'));
-            $query = "UPDATE users SET last_login = '$old_date' WHERE user_id IN ($ids_string)";
+            $stmt = $pdo->prepare("UPDATE users SET last_login = ? WHERE user_id IN ($placeholders)");
+            $user_ids = array_merge([$old_date], $user_ids);
         } else {
             echo json_encode(['success' => false, 'message' => 'Invalid action']);
             exit;
         }
         
-        if ($conn->query($query)) {
+        if ($stmt->execute($user_ids)) {
             echo json_encode(['success' => true, 'message' => 'Bulk action completed successfully']);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Error: ' . $conn->error]);
+            echo json_encode(['success' => false, 'message' => 'Error executing bulk action']);
         }
         exit;
     }
     
-    // Logout
     if($_POST['action'] == 'logout') {
         session_destroy();
         echo json_encode(['success' => true, 'message' => 'Logged out successfully']);

@@ -1,7 +1,7 @@
 <?php
 // manager_dashboard_simulation.php
 session_start();
-require_once "config.php";
+require_once '../config/config.php';
 
 // Check if user is logged in and is manager - REMOVE the simulation override
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'manager') {

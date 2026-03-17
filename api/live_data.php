@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once "staff_dashboard.php";
+require_once "../staff/staff_dashboard.php";
 
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] != 'staff'){

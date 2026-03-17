@@ -1,7 +1,6 @@
 <?php
 session_start();
-require_once "config.php";
-
+require_once '../config/config.php';
 // Ensure logged in staff
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] != 'staff'){
     header("Location: login.php");
