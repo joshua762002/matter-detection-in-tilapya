@@ -1,9 +1,9 @@
 <?php
+session_start(); // <- DAPAT NASA PINAKATUKTOK
+require_once '../config/config.php';
 // admin_dashboard.php
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_WARNING);
 ini_set('display_errors', 1);
-
-require_once '../config/config.php'; // Ito na ang may $pdo
 
 // Set Philippines Time Zone
 date_default_timezone_set('Asia/Manila');
@@ -1234,8 +1234,10 @@ if(isset($_POST['action'])) {
                 <span>Admin – <?php echo htmlspecialchars($admin_name); ?></span>
                 <span id="notificationBadge" class="notification-badge"><?php echo $new_alerts_count; ?></span>
             </div>
-            <a href="logout.php" class="logout-btn" onclick="return confirm('Logout from Admin Dashboard?')">
-                <i class="fas fa-sign-out-alt"></i> Logout
+            <a href="../auth/logout.php" class="logout-btn" onclick="return confirm('Logout?')">
+            <i class="fas fa-sign-out-alt"></i> Logout
+</a>
+</a>
             </a>
         </div>
     </nav>

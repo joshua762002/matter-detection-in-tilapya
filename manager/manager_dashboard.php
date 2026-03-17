@@ -742,11 +742,9 @@ if(isset($_POST['action'])) {
             <div class="user-badge">
                 <i class="fas fa-user-tie"></i>
                 <span>Manager – <?php echo htmlspecialchars($manager_name); ?></span>
-            </div>
-            <!-- CHANGE THIS: Replace button with link to logout.php -->
-            <a href="logout.php" class="logout-btn" onclick="return confirm('Logout from Manager Dashboard?')">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </a>
+            <a href="../auth/logout.php" class="logout-btn" onclick="return confirm('Logout from Manager Dashboard?')">
+    <i class="fas fa-sign-out-alt"></i> Logout
+</a>
         </div>
     </nav>
 

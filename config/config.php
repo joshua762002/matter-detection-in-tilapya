@@ -1,7 +1,8 @@
 <?php
 // config/config.php
-// Remove this line kung nasa top na ng file
-// session_start(); // <-- COMMENT OUT OR DELETE THIS LINE
+// REMOVE these lines:
+// session_save_path('C:/xampp/tmp/');
+// session_start();
 
 // Database connection
 require_once __DIR__ . '/db_connect.php';

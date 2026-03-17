@@ -1,10 +1,13 @@
 <?php
-// auth/login.php
+session_start();
+require_once '../config/config.php';
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Start session and include config
-require_once '../config/config.php';
+// Start output buffering - para sure walang output before headers
+ob_start();
+
 
 $error = '';
 
@@ -16,31 +19,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $error = "Please fill in all fields";
     } else {
         try {
-            // Query using email
+            // Get user by email
             $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
             $stmt->execute([$email]);
             $user = $stmt->fetch();
             
             if ($user) {
-                // Check password (supports both hashed and plain for now)
-                $password_valid = false;
-                
-                if(strlen($user['password']) == 60) {
-                    // Hashed password
-                    $password_valid = password_verify($password, $user['password']);
-                } else {
-                    // Plain text (temporary)
-                    $password_valid = ($password === $user['password']);
-                    
-                    // If valid, hash it for next time
-                    if($password_valid) {
-                        $hashed = password_hash($password, PASSWORD_DEFAULT);
-                        $update = $pdo->prepare("UPDATE users SET password = ? WHERE user_id = ?");
-                        $update->execute([$hashed, $user['user_id']]);
-                    }
-                }
-                
-                if ($password_valid) {
+                // Verify password
+                if (password_verify($password, $user['password'])) {
                     // Set session
                     $_SESSION['user_id'] = $user['user_id'];
                     $_SESSION['full_name'] = $user['full_name'];
@@ -52,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $update = $pdo->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
                     $update->execute([$user['user_id']]);
                     
-                    // Log activity (optional - handle if table doesn't exist)
+                    // Log activity
                     try {
                         $log = $pdo->prepare("INSERT INTO activities (user_id, action, ip_address, created_at) VALUES (?, 'login', ?, NOW())");
                         $log->execute([$user['user_id'], $_SERVER['REMOTE_ADDR']]);
@@ -60,19 +46,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         // Skip if activities table doesn't exist
                     }
                     
-                    // Redirect based on role
+                    // Clear output buffer before redirect
+                    ob_end_clean();
+                    
+                    // Redirect based on role - use absolute path
+                    $base_url = "http://localhost/matter-detection-in-tilapya";
+                    
                     switch($user['role']) {
                         case 'admin':
-                            header("Location: ../admin/admin_dashboard.php");
+                            header("Location: $base_url/admin/admin_dashboard.php");
                             break;
                         case 'manager':
-                            header("Location: ../manager/manager_dashboard.php");
+                            header("Location: $base_url/manager/manager_dashboard.php");
                             break;
                         case 'staff':
-                            header("Location: ../staff/staff_dashboard.php");
+                            header("Location: $base_url/staff/staff_dashboard.php");
                             break;
                         default:
-                            header("Location: login.php?error=invalid_role");
+                            header("Location: $base_url/auth/login.php?error=invalid_role");
                     }
                     exit();
                 } else {
