@@ -1,9 +1,10 @@
 <?php
 session_start();
 require_once '../config/config.php';
+
 // Ensure logged in staff
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] != 'staff'){
-    header("Location: login.php");
+    header("Location: ../auth/login.php");
     exit();
 }
 
@@ -14,72 +15,71 @@ $pond          = $assigned_pond; // use this in queries
 $email         = $_SESSION['email'] ?? 'N/A';
 $last_login    = $_SESSION['last_login'] ?? 'N/A';
 
-// --- Fetch readings from database or simulate ---
+// --- Fetch readings from database using $pdo ---
 $sql = "SELECT DATE(detected_at) AS sample_date,
                organic_mg_l,
                temperature_c,
                ph_level
         FROM user_ponds
-        WHERE pond_name='$pond'
+        WHERE pond_name = ?
         ORDER BY detected_at ASC
         LIMIT 14";
 
-$result = $conn->query($sql);
+$stmt = $pdo->prepare($sql);
+$stmt->execute([$pond]);
+$result = $stmt->fetchAll();
 
 $dates = [];
 $organic = [];
 $temp = [];
 $ph = [];
 
-if($result && $result->num_rows > 0){
-    while($row = $result->fetch_assoc()){
+if($result && count($result) > 0){
+    foreach($result as $row){
         $dates[] = date("M d", strtotime($row['sample_date']));
         $organic[] = floatval($row['organic_mg_l']);
         $temp[] = floatval($row['temperature_c']);
         $ph[] = floatval($row['ph_level']);
     }
-} else 
+} else { 
     // Simulation fallback
-  for($i=0;$i<14;$i++){
-    $dates[] = date("M d", strtotime("-".(13-$i)." days"));
+    for($i=0;$i<14;$i++){
+        $dates[] = date("M d", strtotime("-".(13-$i)." days"));
 
-    if($pond == "A-1"){ 
-        // Organic random safe value
-        $organic_val = rand(50,250)/10; // 5.0 – 25.0
+        if($pond == "A-1"){ 
+            // Organic random safe value
+            $organic_val = rand(50,250)/10; // 5.0 – 25.0
+            if(rand(1,10) == 1){
+                $organic_val = rand(260,350)/10; // 26 – 35 mg/L → high
+            }
+            $organic[] = $organic_val;
 
-        // 10% chance na maging HIGH (unsafe)
-        if(rand(1,10) == 1){
-            $organic_val = rand(260,350)/10; // 26 – 35 mg/L → high
+            // Temperature
+            $temp_val = rand(260,310)/10; // 26 – 31 °C
+            if(rand(1,10) == 1){ $temp_val = rand(315,330)/10; }
+            $temp[] = $temp_val;
+
+            // pH
+            $ph_val = rand(65,85)/10; // 6.5 – 8.5
+            if(rand(1,20) == 1){ $ph_val = rand(60,90)/10; }
+            $ph[] = $ph_val;
+
+        } else { 
+            // other ponds
+            $organic_val = rand(60,280)/10;
+            if(rand(1,10) == 1){ $organic_val = rand(290,350)/10; }
+            $organic[] = $organic_val;
+
+            $temp_val = rand(270,320)/10;
+            if(rand(1,10) == 1){ $temp_val = rand(325,340)/10; }
+            $temp[] = $temp_val;
+
+            $ph_val = rand(70,85)/10;
+            if(rand(1,20) == 1){ $ph_val = rand(60,90)/10; }
+            $ph[] = $ph_val;
         }
-        $organic[] = $organic_val;
-
-        // Temperature
-        $temp_val = rand(260,310)/10; // 26 – 31 °C
-        if(rand(1,10) == 1){ $temp_val = rand(315,330)/10; } // spike temp
-        $temp[] = $temp_val;
-
-        // pH
-        $ph_val = rand(65,85)/10; // 6.5 – 8.5
-        if(rand(1,20) == 1){ $ph_val = rand(60,90)/10; } // rare spike
-        $ph[] = $ph_val;
-
-    } else { 
-        // other ponds (similar logic)
-        $organic_val = rand(60,280)/10;
-        if(rand(1,10) == 1){ $organic_val = rand(290,350)/10; }
-        $organic[] = $organic_val;
-
-        $temp_val = rand(270,320)/10;
-        if(rand(1,10) == 1){ $temp_val = rand(325,340)/10; }
-        $temp[] = $temp_val;
-
-        $ph_val = rand(70,85)/10;
-        if(rand(1,20) == 1){ $ph_val = rand(60,90)/10; }
-        $ph[] = $ph_val;
     }
 }
-
-$conn->close();
 ?>
 
 <!DOCTYPE html>
@@ -150,12 +150,13 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
 
     <!-- Right-aligned Logout button -->
     <div class="d-flex ms-auto">
-        <a href="logout.php" class="btn btn-outline-light btn-sm">
+        <a href="../auth/logout.php" class="btn btn-outline-light btn-sm">
             <i class="bi bi-box-arrow-right me-1"></i> Logout
         </a>
     </div>
   </div>
 </nav>
+
 <!-- Header -->
 <div class="dashboard-header">
     <h2>Pond <?php echo $pond; ?> Live Dashboard</h2>
@@ -185,8 +186,6 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
                     pH Level
                     <span class="fw-bold" id="status-ph"><?php echo end($ph); ?></span>
                 </li>
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-
             </ul>
         </div>
     </div>
@@ -194,27 +193,25 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
     <!-- Staff Info Card -->
     <div class="col-md-6">
         <div class="card p-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="card-title">Staff Info</h5>
-        <i class="bi bi-person-circle"></i>
-    </div>
-    <ul class="list-group list-group-flush">
-                    <ul class="list-group list-group-flush">
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            Name
-            <span class="fw-bold"><?php echo $full_name; ?></span>
-        </li>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            Email
-            <span class="fw-bold"><?php echo $email; ?></span>
-        </li>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            Last Login
-            <span class="fw-bold"><?php echo $last_login; ?></span>
-        </li>
-</ul>
-        </ul>
-</div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title">Staff Info</h5>
+                <i class="bi bi-person-circle"></i>
+            </div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Name
+                    <span class="fw-bold"><?php echo $full_name; ?></span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Email
+                    <span class="fw-bold"><?php echo $email; ?></span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Last Login
+                    <span class="fw-bold"><?php echo $last_login; ?></span>
+                </li>
+            </ul>
+        </div>
     </div>
 
 </div>
@@ -227,7 +224,6 @@ body { background:#121920; font-family:'Segoe UI', sans-serif; margin:0; padding
     </div>
     <canvas id="pondChart"></canvas>
 </div>
-
 
 <!-- Summary Cards with Dynamic Icons -->
 <div class="summary-cards">
@@ -260,25 +256,7 @@ const iconPH = document.getElementById('icon-ph');
 iconOrg.style.color = (orgVal <= 100) ? 'limegreen' : 'red';
 iconTemp.style.color = (tempVal <= 32) ? 'limegreen' : 'red';
 iconPH.style.color = (phVal >= 6.5 && phVal <= 8.5) ? 'limegreen' : 'red';
-</script>
 
-<style>
-/* Icon styling */
-.summary-card h5 i {
-    font-size: 1.3rem;
-    vertical-align: middle;
-}
-</style>
-<style>
-/* Icon styling */
-.summary-card h5 i {
-    font-size:1.3rem;
-    vertical-align:middle;
-}
-</style>
-</style>
-
-<script>
 // --- Chart.js Multi-Axis Gradient Chart ---
 const ctx = document.getElementById('pondChart').getContext('2d');
 
@@ -352,7 +330,6 @@ const tempAnim = new CountUp('sum-temp', <?php echo round(array_sum($temp)/count
 const phAnim = new CountUp('sum-ph', <?php echo round(array_sum($ph)/count($ph),1); ?>, options);
 orgAnim.start(); tempAnim.start(); phAnim.start();
 
-
 // Grab elements
 const statusOrg  = document.getElementById('status-org');
 const statusTemp = document.getElementById('status-temp');
@@ -398,10 +375,11 @@ function updatePanel(){
 updatePanel(); // initial load
 setInterval(updatePanel, 5000);
 </script>
+
 <footer style="
     width: 100%;
-    background: rgba(31, 42, 56, 0.85); /* match sa card bg pero semi-transparent */
-    color: #eee; /* light text para contrast sa dark bg */
+    background: rgba(31, 42, 56, 0.85);
+    color: #eee;
     text-align: center;
     padding: 12px 0;
     font-size: 0.9rem;
@@ -409,11 +387,9 @@ setInterval(updatePanel, 5000);
     box-shadow: 0 -2px 8px rgba(0,0,0,0.4);
     backdrop-filter: blur(3px);
     margin-top: 30px;
-    
 ">
     2026 &copy; Organic-Matter Detection in Tilapia
 </footer>
-
 
 </body>
 </html>
